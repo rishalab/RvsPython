@@ -1,0 +1,25 @@
+Tasks,Package_python,DRAM_python,Energy_python,Time_python,Package_R,DRAM_R,Energy_R,Time_R,,
+Decision Tree,513.95,48.08,563.03,5.285,46.34,4.3,50.64,0.476,,
+Gaussian Naive Bayes,0.63,0.09,0.72,0.011,1.99,0.19,2.18,0.019,,
+Logistic Regression,4.74,0.33,5.07,0.039,226.63,21.84,248.47,2.345,,
+Random Forest ,129.82,12.43,142.25,1.395,794.97,66.18,861.15,8.173,,
+Support Vector Machine,514.83,48.05,562.88,5.295,2343.45,182.67,2526.12,23.48,,
+,,,,,,,,,,
+Decision Tree,182.38,16.87,199.25,1.904,2.25,0.23,2.48,0.022,,
+Gaussian Naive Bayes,0.3,0.05,0.35,0.006,0.21,0.02,0.23,0.001,,
+Logistic Regression,0.71,0.08,0.79,0.009,3.09,0.32,3.41,0.03,,
+Random Forest ,3.41,0.46,3.87,0.055,39.15,3.33,42.48,0.406,,
+Support Vector Machine,182.44,16.88,199.32,1.916,725.12,56.01,781.13,7.242,,
+,,,,,,,,,,
+,,,,,,,,,,
+,,,,,,,,,,
+,,,,,,,,,,
+,,,,,,,,,,
+,,,,,,,,,,
+,,,,,,,,,,
+,,Tasks,Python,R,,,,Tasks,Python,R
+,,Decision Tree,563.03,50.64,,,,Decision Tree,199.25,2.48
+,,Gaussian Naive Bayes,0.72,2.18,,,,Gaussian Naive Bayes,0.35,0.23
+,,Logistic Regression,5.07,248.47,,,,Logistic Regression,0.79,3.41
+,,Random Forest ,142.25,861.15,,,,Random Forest ,3.87,42.48
+,,Support Vector Machine,562.88,2526.12,,,,Support Vector Machine,199.32,781.13
