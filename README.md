@@ -13,6 +13,13 @@ In this project, we conducted an emprical analysis of the energy consumption ass
   - Libraries: CRAN repository (specific libraries and version details provided in the draft)
   - Energy Consumption Measurement: RJoules
 
+## Environment
+The analysis was done in a environment with the following configuration 
+- OS : Ubuntu 20.04.1~149
+- Kernel : 5.15.0-139-generic
+- Processor : Intel(R) Xeon(R) Gold 6226R 2.90GHz, 16 cores
+- RAM : 128 GB
+
 
 ## Methodology
 1. **Data Collection**: Gathered datasets suitable for various machine learning tasks.
