@@ -1,13 +1,15 @@
 #!/usr/bin/env Rscript
 #
-# ml_classification_tasks_dataset1_rerun.R
+# ml_classification_tasks_dataset3.R
 #
-# Dataset1 (Adult Census Income) classification energy measurement, R side.
-# Mirrors ml_classification_tasks_dataset1_rerun.py exactly: same data path,
-# same feature/target selection, same split proportions, same standardisation,
-# same kernel caps, same five algorithms in the paper's package mapping, same
-# ten measured functions, same repetition/shuffle protocol. Any deviation from
-# the Python script's structure is marked [R-DEV-n] inline.
+# Dataset3 (NYC Taxi Trip Duration) classification energy measurement, R side.
+# Mirrors ml_classification_tasks_dataset3.py: same data path, same feature
+# selection, same [DECISION-B] target-leakage exclusion of dropoff_datetime,
+# same [DECISION-B]-adjacent classification target (median split on
+# trip_duration, since the same StandardScaler+astype(int) trick as Dataset1
+# and Dataset2 would place almost every row in one class here), same kernel
+# caps, same five algorithms, same ten measured functions, same
+# repetition/shuffle protocol.
 #
 # Model -> CRAN package mapping (fixed by the paper, do not change):
 #   Logistic Regression  -> glmnet
@@ -19,21 +21,16 @@
 RANDOM_STATE <- 42
 N_REPETITIONS <- 10
 SLEEP_SECONDS <- 30
+
+# [DECISION-A] Same cap as all five other scripts; must not be changed here
+# in isolation. See ml_classification_tasks_dataset3.py.
 KERNEL_TRAIN_CAP <- 20000
 KERNEL_PRED_CAP <- 20000
 
-# [FIX-DATA] Combined with adult.test (the UCI test split, downloaded
-# separately) so the full dataset matches the paper's reported 48,842 rows
-# (32,561 + 16,281) rather than the 32,561-row train-only file alone. See
-# FIXES.md Section 1.
-DATA_PATH <- "/home/ug/RvsPython/ver/adult.data"
-DATA_PATH_TEST <- "/home/ug/RvsPython/ver/adult.test"
-RJOULES_OUTPUT_CSV <- "output_ml_classification_adult_rerun_r.csv"
+DATA_PATH <- "/home/ug/RvsPython/ver/RvsPython/D3.csv"
+RJOULES_OUTPUT_CSV <- "output_ml_classification_taxi_r.csv"
 if (file.exists(RJOULES_OUTPUT_CSV)) file.remove(RJOULES_OUTPUT_CSV)
 
-# energy_measurement.R is sourced first: it puts the renv project library on
-# .libPaths() regardless of the caller's working directory (see [R-FIX-4]
-# there), which the library() calls below depend on.
 .script_args <- commandArgs(trailingOnly = FALSE)
 .script_dir <- dirname(sub("--file=", "", grep("--file=", .script_args, value = TRUE)))
 if (length(.script_dir) == 0 || .script_dir == "") .script_dir <- "."
@@ -49,38 +46,23 @@ suppressMessages({
 })
 
 # ---------------------------------------------------------------------------
-# Data preparation -- identical column selection to the Python script.
+# Data preparation
 # ---------------------------------------------------------------------------
 
-columns <- c("age", "workclass", "fnlwgt", "education", "education.num",
-             "marital.status", "occupation", "relationship", "race", "sex",
-             "capital.gain", "capital.loss", "hours.per.week",
-             "native.country", "income")
-
-# adult.test has a bogus first line ("|1x3 Cross validator") and encodes the
-# income label with a trailing period ("<=50K." / ">50K."), unlike adult.data
-# ("<=50K" / ">50K"); stripped so the two files share the same two classes
-# instead of silently becoming four.
-train_df <- read.csv(DATA_PATH, header = FALSE, col.names = columns,
-                      strip.white = TRUE, stringsAsFactors = FALSE)
-test_df <- read.csv(DATA_PATH_TEST, header = FALSE, col.names = columns,
-                     strip.white = TRUE, stringsAsFactors = FALSE, skip = 1)
-test_df$income <- sub("\\.$", "", test_df$income)
-dataframe <- rbind(train_df, test_df)
+dataframe <- read.csv(DATA_PATH, stringsAsFactors = FALSE)
 dataframe[dataframe == "?"] <- NA
 
 # [R-DEV] as.integer(factor(x)) - 1 reproduces sklearn's LabelEncoder: a
 # 0-based integer code per unique level, sorted the way np.unique would sort
 # it -- numerically for a numeric column, lexicographically for a string
 # column. R's factor() alone always sorts by the string representation, which
-# would silently miscode any numeric categorical column (not one of this
-# dataset's, but see rating_n in the Dataset2 scripts, where this mattered).
-# "?" (workclass, occupation) was replaced with NA above; sklearn's
-# LabelEncoder still fits and transforms those rows by giving NaN its own
-# code rather than erroring, so NA is given its own explicit trailing level
-# here too instead of propagating NA into the feature matrix, which several
-# of the R model fitters below (glmnet, e1071::svm, randomForest by default)
-# do not accept.
+# silently miscodes a numeric categorical column (e.g. rating_n below: 1..10
+# would sort as "1","10","2",...,"9"), so numeric columns are handled
+# separately. NA ("?" in the string columns) gets its own explicit trailing
+# level rather than propagating, matching sklearn's LabelEncoder (which also
+# fits successfully on NaN) and avoiding NA in the feature matrix, which
+# several of the R model fitters below (glmnet, e1071::svm, randomForest by
+# default) do not accept.
 label_encode <- function(x) {
   if (is.numeric(x)) {
     lvls <- sort(unique(x[!is.na(x)]))
@@ -91,24 +73,19 @@ label_encode <- function(x) {
   x[is.na(x)] <- "__NA__"
   as.integer(factor(x)) - 1L
 }
-dataframe$income_n <- label_encode(dataframe$income)
-dataframe$sex_n <- label_encode(dataframe$sex)
-dataframe$occupation_n <- label_encode(dataframe$occupation)
-dataframe$marital.status_n <- label_encode(dataframe$marital.status)
-dataframe$workclass_n <- label_encode(dataframe$workclass)
-dataframe$education_n <- label_encode(dataframe$education)
+dataframe$pickup_datetime_n <- label_encode(dataframe$pickup_datetime)
+dataframe$store_and_fwd_flag_n <- label_encode(dataframe$store_and_fwd_flag)
 
-training_features <- c("workclass_n", "sex_n", "fnlwgt", "occupation_n",
-                        "marital.status_n", "education_n", "education.num",
-                        "capital.gain", "hours.per.week", "age", "capital.loss")
-target <- "income_n"
+training_features <- c("vendor_id", "pickup_datetime_n", "store_and_fwd_flag_n",
+                        "passenger_count", "pickup_longitude", "pickup_latitude",
+                        "dropoff_longitude", "dropoff_latitude")
 
-# ---------------------------------------------------------------------------
-# Splitting: 80/20 then 75/25 of the 80%, i.e. 60/20/20 train/pred/test.
-# Matches the two-stage train_test_split(..., random_state=RANDOM_STATE) in
-# the Python script; row-for-row identity across languages is not attempted,
-# only the same proportions and the same fixed seed for reproducibility.
-# ---------------------------------------------------------------------------
+dataframe <- dataframe[stats::complete.cases(dataframe[, c(training_features, "trip_duration")]), ]
+median_duration <- median(dataframe$trip_duration)
+dataframe$long_trip <- as.integer(dataframe$trip_duration >= median_duration)
+cat(sprintf("[note] median trip_duration = %s s; class balance = %.3f\n",
+            median_duration, mean(dataframe$long_trip)))
+target <- "long_trip"
 
 split_indices <- function(n, seed) {
   set.seed(seed)
@@ -127,10 +104,8 @@ X_train_raw <- as.matrix(dataframe[idx$train, training_features])
 X_pred_raw <- as.matrix(dataframe[idx$pred, training_features])
 X_test_raw <- as.matrix(dataframe[idx$test, training_features])
 Y_train <- dataframe[idx$train, target]
-Y_pred <- dataframe[idx$pred, target]
 Y_test <- dataframe[idx$test, target]
 
-# StandardScaler equivalent: centre/scale by the training set only.
 mu <- colMeans(X_train_raw)
 sdv <- apply(X_train_raw, 2, sd)
 sdv[sdv == 0] <- 1
@@ -157,10 +132,6 @@ if (nrow(X1_kernel) < nrow(X1)) {
   cat(sprintf("[note] SVM trained on %d of %d rows\n", nrow(X1_kernel), nrow(X1)))
 }
 
-# [FIX-OOM] Same fix as the Python scripts: e1071::svm's predict cost scales
-# with n_query * n_support_vectors, and at Dataset3 scale that is large enough
-# to be impractical against the full held-out slice. Cap the query side for
-# the kernel model (SVM) only.
 kernel_pred <- cap_rows(X_pred_s, KERNEL_PRED_CAP, RANDOM_STATE)
 X_pred_kernel_s <- kernel_pred$X
 kernel_test <- cap_rows(X_test_s, KERNEL_PRED_CAP, RANDOM_STATE)
@@ -311,10 +282,6 @@ report("SVM classification",
 report("Decision tree classification",
        predict(decision_tree_classifier_model, newdata = as.data.frame(X_test_s), type = "class"))
 
-# One shuffled block per repetition, each function present exactly once, so
-# every task gets exactly N_REPETITIONS measurements -- same protocol as the
-# Python scripts' [DEV-7]. Named so measure_energy() can be given the correct
-# tag explicitly (see [R-FIX-1] in energy_measurement.R).
 function_list <- list(
   test_random_forest_classification = test_random_forest_classification,
   test_logistic_regression_classification = test_logistic_regression_classification,

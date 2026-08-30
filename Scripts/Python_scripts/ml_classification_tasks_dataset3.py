@@ -1,14 +1,16 @@
 """
-ml_classification_tasks_dataset1_rerun.py
+ml_classification_tasks_dataset3.py
 
-Dataset1 (Adult Census Income) classification energy measurement for the R vs Python IST revision.
+Dataset3 (NYC Taxi Trip Duration) classification energy measurement.
+Built on the structure of ml_classification_tasks_dataset1.py and
+ml_classification_tasks_dataset2.py.
 
-Corrected rerun. Structurally identical to ml_classification_tasks_dataset3.py so that
-all three scales are measured under the same protocol. Every departure from the
-original script is marked [DEV-n] inline and listed at the end of this file.
-
-Do not edit the protocol constants without telling Ch. They are shared across
-all six scripts and changing one breaks the cross-scale comparison.
+Deviations from the template are marked [DEV-n] inline and listed at the
+bottom. [DEV-1] is the important one: in both existing classification scripts
+the function named decision_tree_classification instantiates SVC(), so every
+published Decision Tree classification figure for Dataset1 and Dataset2 is a
+second SVM run. That is corrected here, which means Dataset1 and Dataset2
+classification must be rerun before the three scales can be compared.
 """
 
 import pandas as pd
@@ -30,23 +32,23 @@ from sklearn.metrics import (accuracy_score, precision_score, recall_score,
                              f1_score)
 
 # ---------------------------------------------------------------------------
-# Configuration. Identical across all six scripts.
+# Configuration
 # ---------------------------------------------------------------------------
 
-# [FIX-DATA] Combined with adult.test (the UCI test split, downloaded
-# separately) so the full dataset matches the paper's reported 48,842 rows
-# (32,561 + 16,281) rather than the 32,561-row train-only file alone. See
-# FIXES.md Section 1.
-DATA_PATH = "/home/ug/RvsPython/ver/adult.data"
-DATA_PATH_TEST = "/home/ug/RvsPython/ver/adult.test"
-OUTPUT_CSV = "output_ml_classification_adult_rerun.csv"
+DATA_PATH = "/home/ug/RvsPython/ver/RvsPython/D3.csv"
+OUTPUT_CSV = "output_ml_classification_taxi.csv"   # [DEV-5]
 RANDOM_STATE = 42
 N_REPETITIONS = 10
 SLEEP_SECONDS = 30
 
-# Kernel methods only. Fixed at 20000 because that is the value Dataset3 was
-# run at, and the cap has to be identical at every scale for the scaling
-# analysis to mean anything. State it in Section 5.
+# [DECISION-A] SVC is O(n^2) in kernel evaluations and will not complete on
+# roughly 875,000 training rows.
+# [FIX-CONSISTENCY] This was left at None here, which is inconsistent with the
+# regression script and with FULL_RERUN_INSTRUCTIONS.md Section 2, both of
+# which fix KERNEL_TRAIN_CAP = 20000 across all six scripts. An uncapped SVC
+# fit here would also never finish, since the classification target has two
+# balanced classes on ~875,000 rows. Set to None only to attempt the full set,
+# and if so it must also be changed identically at Dataset1 and Dataset2.
 KERNEL_TRAIN_CAP = 20000
 
 # [FIX-OOM] Capping training alone is not enough. sklearn's kernel methods
@@ -70,58 +72,42 @@ def sleep():
 # ---------------------------------------------------------------------------
 # Data preparation
 # ---------------------------------------------------------------------------
-# Column selection is unchanged from the original script. Missing values are
-# left as an encoded category rather than dropped, also as in the original, so
-# that the reported row count for this dataset stays correct.
+# Feature set is identical to the Dataset3 regression script, following the
+# rule recovered from Dataset1 and Dataset2, where both paradigms shared one
+# feature list. dropoff_datetime is dropped as target leakage; see the
+# regression script.
+#
+# [DECISION-B] The target is where the template cannot be inherited. Dataset1
+# and Dataset2 reused the same target column for both paradigms, relying on
+# StandardScaler followed by astype(int) to produce classes. That truncation
+# yields two classes on Adult income and, less obviously, two classes on the
+# ten-level drug rating with a threshold near rating 3.7 that is an artefact
+# rather than a design choice. Applied to trip_duration, which is heavily
+# right skewed, it would place almost every row in a single class.
+# The class is therefore defined explicitly as a median split on
+# trip_duration, giving a balanced binary task that matches the effective
+# structure of both earlier scales. This must be stated in Section 5.
 
-columns = [
-    'age',
-    'workclass',
-    'fnlwgt',
-    'education',
-    'education.num',
-    'marital.status',
-    'occupation',
-    'relationship',
-    'race',
-    'sex',
-    'capital.gain',
-    'capital.loss',
-    'hours.per.week',
-    'native.country',
-    'income'
-]
-
-# adult.test has a bogus first line ("|1x3 Cross validator") and encodes the
-# income label with a trailing period ("<=50K." / ">50K."), unlike adult.data
-# ("<=50K" / ">50K"); stripped so the two files share the same two classes
-# instead of silently becoming four.
-train_df = pd.read_csv(DATA_PATH, names=columns, skipinitialspace=True)
-test_df = pd.read_csv(DATA_PATH_TEST, names=columns, skipinitialspace=True,
-                       skiprows=1)
-test_df['income'] = test_df['income'].str.rstrip('.')
-dataframe = pd.concat([train_df, test_df], ignore_index=True)
+dataframe = pd.read_csv(DATA_PATH)
 dataframe.replace("?", np.nan, inplace=True)
 
-le_income = LabelEncoder()
-le_sex = LabelEncoder()
-le_occupation = LabelEncoder()
-le_marital_status = LabelEncoder()
-le_workclass = LabelEncoder()
-le_education = LabelEncoder()
-dataframe['income_n'] = le_income.fit_transform(dataframe['income'])
-dataframe['sex_n'] = le_sex.fit_transform(dataframe['sex'])
-dataframe['occupation_n'] = le_occupation.fit_transform(dataframe['occupation'])
-dataframe['marital.status_n'] = le_marital_status.fit_transform(dataframe['marital.status'])
-dataframe['workclass_n'] = le_workclass.fit_transform(dataframe['workclass'])
-dataframe['education_n'] = le_education.fit_transform(dataframe['education'])
+le_pickup_datetime = LabelEncoder()
+le_store_and_fwd_flag = LabelEncoder()
+dataframe['pickup_datetime_n'] = le_pickup_datetime.fit_transform(
+    dataframe['pickup_datetime'])
+dataframe['store_and_fwd_flag_n'] = le_store_and_fwd_flag.fit_transform(
+    dataframe['store_and_fwd_flag'])
 
-# [DEV-1] The duplicate entry in the original feature list is removed. It named
-# the same column twice, which fed the identical vector to the model twice.
-training_features = ['workclass_n', 'sex_n', 'fnlwgt', 'occupation_n',
-                     'marital.status_n', 'education_n', 'education.num',
-                     'capital.gain', 'hours.per.week', 'age', 'capital.loss']
-target = ['income_n']
+training_features = ['vendor_id', 'pickup_datetime_n', 'store_and_fwd_flag_n',
+                     'passenger_count', 'pickup_longitude', 'pickup_latitude',
+                     'dropoff_longitude', 'dropoff_latitude']
+
+dataframe = dataframe.dropna(subset=training_features + ['trip_duration'])
+median_duration = dataframe['trip_duration'].median()
+dataframe['long_trip'] = (dataframe['trip_duration'] >= median_duration).astype(int)
+target = ['long_trip']
+print(f"[note] median trip_duration = {median_duration} s; "
+      f"class balance = {dataframe['long_trip'].mean():.3f}")
 
 X, X_test, Y, Y_test = train_test_split(dataframe[training_features],
                                         dataframe[target],
@@ -132,11 +118,10 @@ X_train, X_pred, Y_train, Y_pred = train_test_split(X, Y,
                                                     test_size=0.25,
                                                     random_state=RANDOM_STATE)
 
-# [DEV-2] Features are standardised; the class label is not. The originals
-# passed the label through StandardScaler and then cast to int, which truncates.
-# On Adult income that happened to preserve two classes. On the ten level drug
-# rating it collapsed to two classes at a threshold near rating 3.7 that was an
-# artefact rather than a design choice.
+# [DEV-2] Features are standardised; the class label is not. Both existing
+# classification scripts passed the label through StandardScaler and then cast
+# to int, which on the ten-level drug rating collapsed the classes into
+# truncated buckets rather than classifying the rating.
 sc_X = StandardScaler()
 X1 = sc_X.fit_transform(X_train)
 X_pred_s = sc_X.transform(X_pred)
@@ -170,14 +155,10 @@ if len(X_test_kernel_s) < len(X_test_s):
 
 
 def report(name, model, kernel=False):
-    # [DEV-3] Inference and scoring use the standardised matrix. In the
-    # originals every classifier fitted on X1 but predicted on the raw X_pred
-    # and X_test, so training and inference ran on different scales and the
-    # published classification accuracy figures are not usable.
-    #
-    # [DEV-4] Metrics come from sklearn rather than from unpacking a confusion
-    # matrix into tn, fp, fn, tp, which assumes a binary problem and raised on
-    # the multiclass target.
+    # [DEV-3] Metrics computed with sklearn rather than by unpacking a
+    # confusion matrix into tn, fp, fn, tp. That unpacking assumes a binary
+    # problem and raised on the multiclass drug target; one script also used
+    # `tn, fp, fn, tp = cm` without .ravel().
     #
     # [FIX-OOM] kernel=True scores against the capped query set (see
     # KERNEL_PRED_CAP above) instead of the full test set.
@@ -196,7 +177,8 @@ def report(name, model, kernel=False):
 # ---------------------------------------------------------------------------
 
 def random_forest_classification():
-    return RandomForestClassifier(random_state=RANDOM_STATE).fit(X1, Y1)
+    random_forest_model = RandomForestClassifier(random_state=RANDOM_STATE)
+    return random_forest_model.fit(X1, Y1)
 
 
 @measure_energy(handler=csv_handler)
@@ -215,12 +197,13 @@ def test_random_forest_classification_inference():
 # ---------------------------------------------------------------------------
 # Logistic Regression
 # ---------------------------------------------------------------------------
-# [DEV-5] The return statement is present. In the Dataset2 script it was
-# commented out, so the function returned None and the training measurement
-# captured only object instantiation.
+# [DEV-4] The return statement is present. In the Dataset2 script it was
+# commented out, so the function returned None, the training measurement
+# captured only object instantiation, and the model object was unusable.
 
 def logistic_regression_classification():
-    return LogisticRegression(max_iter=1000).fit(X1, Y1)
+    logistic_regression_model = LogisticRegression(max_iter=1000)
+    return logistic_regression_model.fit(X1, Y1)
 
 
 @measure_energy(handler=csv_handler)
@@ -241,7 +224,8 @@ def test_logistic_regression_classification_inference():
 # ---------------------------------------------------------------------------
 
 def gaussian_NB_classification():
-    return GaussianNB().fit(X1, Y1)
+    naive_bayes_model = GaussianNB()
+    return naive_bayes_model.fit(X1, Y1)
 
 
 @measure_energy(handler=csv_handler)
@@ -262,7 +246,8 @@ def test_gaussian_NB_classification_inference():
 # ---------------------------------------------------------------------------
 
 def SVM_classification():
-    return SVC().fit(X1_kernel, Y1_kernel)
+    svm_classifier_model = SVC()
+    return svm_classifier_model.fit(X1_kernel, Y1_kernel)
 
 
 @measure_energy(handler=csv_handler)
@@ -282,12 +267,11 @@ def test_SVM_classification_inference():
 # ---------------------------------------------------------------------------
 # Decision Tree
 # ---------------------------------------------------------------------------
-# [DEV-6] DecisionTreeClassifier, not SVC. In both original classification
-# scripts this function instantiated SVC(), so every published Decision Tree
-# classification figure for Dataset1 and Dataset2 was a second SVM run.
+# [DEV-1] DecisionTreeClassifier, not SVC.
 
 def decision_tree_classification():
-    return DecisionTreeClassifier(random_state=RANDOM_STATE).fit(X1, Y1)
+    decision_tree_classifier_model = DecisionTreeClassifier(random_state=RANDOM_STATE)
+    return decision_tree_classifier_model.fit(X1, Y1)
 
 
 @measure_energy(handler=csv_handler)
@@ -313,8 +297,6 @@ report("Naive Bayes classification", naive_bayes_model)
 report("SVM classification", svm_classifier_model, kernel=True)
 report("Decision tree classification", decision_tree_classifier_model)
 
-# [DEV-7] One shuffled block, each function present exactly once, so every task
-# gets exactly N_REPETITIONS measurements.
 function_list = [
     test_random_forest_classification,
     test_logistic_regression_classification,
@@ -339,12 +321,13 @@ print("Process complete")
 csv_handler.save_data()
 
 # ---------------------------------------------------------------------------
-# [DEV-8] random_state is fixed on the splits, the trees, the MLP and the
-#         kernel subsample, so the run is reproducible.
-# [DEV-9] The output filename is distinct. Both original classification scripts
-#         wrote to output_ml_classification_drug.csv, including the one reading
-#         adult.csv.
-# [DEV-10] The unused second read_csv of a derived inference file is dropped.
-#          The Dataset1 regression script loaded adult_infer1.csv and never used
-#          it, which blocks any rerun when that file is missing.
+# Deviations from the Dataset1 / Dataset2 template
+#
+# [DEV-1] Decision tree uses DecisionTreeClassifier, not SVC.
+# [DEV-2] The class label is not standardised.
+# [DEV-3] Metrics from sklearn rather than manual confusion matrix unpacking.
+# [DEV-4] Logistic regression actually fits.
+# [DEV-5] Distinct output filename.
+# [DEV-6] Exactly N_REPETITIONS per task; no pre-loops, no duplicated entries.
+# [DEV-7] random_state fixed throughout.
 # ---------------------------------------------------------------------------

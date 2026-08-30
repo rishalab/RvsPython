@@ -1,14 +1,15 @@
 """
-ml_regression_tasks_dataset1_rerun.py
+ml_regression_tasks_dataset3.py
 
-Dataset1 (Adult Census Income) regression energy measurement for the R vs Python IST revision.
+Dataset3 (NYC Taxi Trip Duration) regression energy measurement.
+Built on the structure of ml_regression_tasks_dataset1.py and
+ml_regression_tasks_dataset2.py.
 
-Corrected rerun. Structurally identical to ml_regression_tasks_dataset3.py so that
-all three scales are measured under the same protocol. Every departure from the
-original script is marked [DEV-n] inline and listed at the end of this file.
-
-Do not edit the protocol constants without telling Ch. They are shared across
-all six scripts and changing one breaks the cross-scale comparison.
+Deviations from the Dataset1 / Dataset2 template are marked [DEV-n] inline
+and listed at the bottom of this file. They exist because the template as
+written does not produce what Section 5 of the paper describes. If Dataset3
+is run with these corrections, Dataset1 and Dataset2 must be rerun with them
+too, otherwise the three scales are not comparable.
 """
 
 import pandas as pd
@@ -29,35 +30,34 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 
 # ---------------------------------------------------------------------------
-# Configuration. Identical across all six scripts.
+# Configuration
 # ---------------------------------------------------------------------------
 
-# [FIX-DATA] Combined with adult.test (the UCI test split, downloaded
-# separately) so the full dataset matches the paper's reported 48,842 rows
-# (32,561 + 16,281) rather than the 32,561-row train-only file alone. See
-# FIXES.md Section 1.
-DATA_PATH = "/home/ug/RvsPython/ver/adult.data"
-DATA_PATH_TEST = "/home/ug/RvsPython/ver/adult.test"
-OUTPUT_CSV = "output_ml_regression_adult_rerun.csv"
-RANDOM_STATE = 42
+DATA_PATH = "/home/ug/RvsPython/ver/RvsPython/D3.csv"
+OUTPUT_CSV = "output_ml_regression_taxi.csv"      # [DEV-5]
+RANDOM_STATE = 42                                  # [DEV-4]
 N_REPETITIONS = 10
 SLEEP_SECONDS = 30
 
-# Kernel methods only. Fixed at 20000 because that is the value Dataset3 was
-# run at, and the cap has to be identical at every scale for the scaling
-# analysis to mean anything. State it in Section 5.
+# [DECISION-A] Kernel methods do not scale to Dataset3.
+# GaussianProcessRegressor holds an n x n kernel matrix. At 60 percent of
+# 1,458,644 rows that is roughly 5.7 TB against 128 GB of RAM. SVR is
+# O(n^2) in kernel evaluations and would run for days.
+# Set KERNEL_TRAIN_CAP to an integer to subsample the training set for
+# Gaussian and SVR only, or to None to attempt the full set (will not
+# complete). Whatever is chosen must be stated in Section 5 and applied
+# identically at Dataset1 and Dataset2 for the scaling analysis to hold.
 KERNEL_TRAIN_CAP = 20000
 
-# [FIX-OOM] Capping training alone is not enough. GaussianProcessRegressor and
-# SVR predict by building a dense (n_query x n_train_kernel) kernel matrix
-# with no chunking (GaussianProcessRegressor.predict computes this as one
-# array; SVR is milder but still O(n_query * n_support_vectors)). At Dataset3
-# scale, scoring or measuring inference against the full ~20% held-out slice
-# (roughly 290,000 rows) against a 20,000-row kernel training set is a
-# ~5.8e9-cell matrix -- tens of GB, and this is what was crashing the
-# Dataset3 regression run with an OOM kill. The same cap value is reused here,
-# applied to the *query* side for kernel models only, and applied identically
-# across all three datasets so no scale gets a size advantage.
+# [FIX-OOM] Capping training alone is not enough. GaussianProcessRegressor.predict
+# and SVR.predict build a (n_query x n_train_kernel) kernel evaluation against
+# every query row. Scoring or measuring inference against the full ~20%
+# held-out slice here (roughly 290,000 rows) against a 20,000-row kernel
+# training set means GaussianProcessRegressor.predict alone materialises a
+# dense ~5.8e9-cell (~46 GB) matrix with no chunking -- this is what was
+# crashing this script with an OOM kill. The same cap value is reused here,
+# applied to the *query* side for kernel models only, and must be applied
+# identically at Dataset1 and Dataset2 (also done, see those two scripts).
 KERNEL_PRED_CAP = 20000
 
 csv_handler = CSVHandler(OUTPUT_CSV)
@@ -70,59 +70,38 @@ def sleep():
 # ---------------------------------------------------------------------------
 # Data preparation
 # ---------------------------------------------------------------------------
-# Column selection is unchanged from the original script. Missing values are
-# left as an encoded category rather than dropped, also as in the original, so
-# that the reported row count for this dataset stays correct.
+# Feature selection follows the rule recovered from the Dataset1 and Dataset2
+# scripts: every column except the identifier and the target, LabelEncoder on
+# every non-numeric column, numeric columns passed through unchanged, no
+# feature engineering, and one feature set shared by regression and
+# classification. pickup_datetime is encoded whole rather than decomposed,
+# mirroring the drug review date_n treatment.
+#
+# [DECISION-B] One departure. dropoff_datetime minus pickup_datetime equals
+# trip_duration exactly, so the mechanical rule would leak the target. It is
+# dropped. This must be stated in Section 5.
 
-columns = [
-    'age',
-    'workclass',
-    'fnlwgt',
-    'education',
-    'education.num',
-    'marital.status',
-    'occupation',
-    'relationship',
-    'race',
-    'sex',
-    'capital.gain',
-    'capital.loss',
-    'hours.per.week',
-    'native.country',
-    'income'
-]
-
-# adult.test has a bogus first line ("|1x3 Cross validator") and encodes the
-# income label with a trailing period ("<=50K." / ">50K."), unlike adult.data
-# ("<=50K" / ">50K"); stripped so the two files share the same two classes
-# instead of silently becoming four.
-train_df = pd.read_csv(DATA_PATH, names=columns, skipinitialspace=True)
-test_df = pd.read_csv(DATA_PATH_TEST, names=columns, skipinitialspace=True,
-                       skiprows=1)
-test_df['income'] = test_df['income'].str.rstrip('.')
-dataframe = pd.concat([train_df, test_df], ignore_index=True)
+dataframe = pd.read_csv(DATA_PATH)
 dataframe.replace("?", np.nan, inplace=True)
 
-le_income = LabelEncoder()
-le_sex = LabelEncoder()
-le_occupation = LabelEncoder()
-le_marital_status = LabelEncoder()
-le_workclass = LabelEncoder()
-le_education = LabelEncoder()
-dataframe['income_n'] = le_income.fit_transform(dataframe['income'])
-dataframe['sex_n'] = le_sex.fit_transform(dataframe['sex'])
-dataframe['occupation_n'] = le_occupation.fit_transform(dataframe['occupation'])
-dataframe['marital.status_n'] = le_marital_status.fit_transform(dataframe['marital.status'])
-dataframe['workclass_n'] = le_workclass.fit_transform(dataframe['workclass'])
-dataframe['education_n'] = le_education.fit_transform(dataframe['education'])
+le_pickup_datetime = LabelEncoder()
+le_store_and_fwd_flag = LabelEncoder()
+dataframe['pickup_datetime_n'] = le_pickup_datetime.fit_transform(
+    dataframe['pickup_datetime'])
+dataframe['store_and_fwd_flag_n'] = le_store_and_fwd_flag.fit_transform(
+    dataframe['store_and_fwd_flag'])
 
-# [DEV-1] The duplicate entry in the original feature list is removed. It named
-# the same column twice, which fed the identical vector to the model twice.
-training_features = ['workclass_n', 'sex_n', 'fnlwgt', 'occupation_n',
-                     'marital.status_n', 'education_n', 'education.num',
-                     'capital.gain', 'hours.per.week', 'age', 'capital.loss']
-target = ['income_n']
+# vendor_id and passenger_count are already numeric, so they pass through
+# unencoded, as age and usefulCount do at the earlier scales.
+training_features = ['vendor_id', 'pickup_datetime_n', 'store_and_fwd_flag_n',
+                     'passenger_count', 'pickup_longitude', 'pickup_latitude',
+                     'dropoff_longitude', 'dropoff_latitude']
+target = ['trip_duration']
 
+# No outlier removal, matching Dataset1 and Dataset2, which filtered nothing.
+dataframe = dataframe.dropna(subset=training_features + target)
+
+# 60 / 20 / 20 train / inference / test, as in Dataset1 and Dataset2.
 X, X_test, Y, Y_test = train_test_split(dataframe[training_features],
                                         dataframe[target],
                                         test_size=0.2,
@@ -132,14 +111,13 @@ X_train, X_pred, Y_train, Y_pred = train_test_split(X, Y,
                                                     test_size=0.25,
                                                     random_state=RANDOM_STATE)
 
-# [DEV-2] All five algorithms fit on the same standardised matrix. The original
-# scripts fit Linear, Gaussian and Decision Tree on raw X_train while SVR and
-# MLP used the scaled X1, and Dataset2 moved Gaussian onto X1, so the Gaussian
-# comparison across scales was not like for like.
-#
-# [DEV-3] The scaled target is not cast to int. The Dataset2 regression script
-# applied Y1 = Y1.astype(int) after scaling, truncating the target for Gaussian,
-# SVR and MLP.
+# [DEV-1] All five algorithms fit on the same standardised matrix. The
+# Dataset1 template fit Linear, Gaussian and Decision Tree on raw X_train
+# while SVR and MLP used the scaled X1, and Dataset2 moved Gaussian onto X1.
+# That inconsistency makes the cross-scale Gaussian comparison invalid.
+# The scaled target is NOT cast to int. The Dataset2 regression script applied
+# Y1 = Y1.astype(int) after scaling, so Gaussian, SVR and MLP there regressed
+# against a truncated integer target while Dataset1 used the continuous one.
 sc_X = StandardScaler()
 sc_Y = StandardScaler()
 X1 = sc_X.fit_transform(X_train)
@@ -147,6 +125,7 @@ Y1 = sc_Y.fit_transform(Y_train)
 X_pred_s = sc_X.transform(X_pred)
 X_test_s = sc_X.transform(X_test)
 
+# Reduced training matrix for the kernel methods only.
 if KERNEL_TRAIN_CAP is not None and len(X1) > KERNEL_TRAIN_CAP:
     rng = np.random.RandomState(RANDOM_STATE)
     idx = rng.choice(len(X1), KERNEL_TRAIN_CAP, replace=False)
@@ -175,9 +154,6 @@ if len(X_test_kernel_s) < len(X_test_s):
 
 
 def report(name, model, kernel=False):
-    # [DEV-4] Every model is scored on the same standardised test matrix. The
-    # original scored some models on raw X_test after fitting on scaled data.
-    #
     # [FIX-OOM] kernel=True scores against the capped query set (see
     # KERNEL_PRED_CAP above) instead of the full test set.
     print(f"The below details are for {name}..")
@@ -187,9 +163,11 @@ def report(name, model, kernel=False):
     if predicted.ndim == 1:
         predicted = predicted.reshape(-1, 1)
     predicted = sc_Y.inverse_transform(predicted)
+    r2 = r2_score(Y_eval, predicted)
+    mae = mean_absolute_error(Y_eval, predicted)
     mse = mean_squared_error(Y_eval, predicted)
-    print("r2 value= ", r2_score(Y_eval, predicted))
-    print("MAE value= ", mean_absolute_error(Y_eval, predicted))
+    print("r2 value= ", r2)
+    print("MAE value= ", mae)
     print("MSE value= ", mse)
     print("RMSE value= ", np.sqrt(mse))
 
@@ -199,7 +177,8 @@ def report(name, model, kernel=False):
 # ---------------------------------------------------------------------------
 
 def linear_regression():
-    return LinearRegression().fit(X1, Y1)
+    linear_regression_model = LinearRegression()
+    return linear_regression_model.fit(X1, Y1)
 
 
 @measure_energy(handler=csv_handler)
@@ -220,7 +199,8 @@ def test_linear_regression_inference():
 # ---------------------------------------------------------------------------
 
 def gaussian_regression():
-    return GaussianProcessRegressor().fit(X1_kernel, Y1_kernel.ravel())
+    gaussian_regression_model = GaussianProcessRegressor()
+    return gaussian_regression_model.fit(X1_kernel, Y1_kernel.ravel())
 
 
 @measure_energy(handler=csv_handler)
@@ -242,7 +222,8 @@ def test_gaussian_regression_inference():
 # ---------------------------------------------------------------------------
 
 def decision_tree_regression():
-    return DecisionTreeRegressor(random_state=RANDOM_STATE).fit(X1, Y1)
+    decision_tree_regression_model = DecisionTreeRegressor(random_state=RANDOM_STATE)
+    return decision_tree_regression_model.fit(X1, Y1)
 
 
 @measure_energy(handler=csv_handler)
@@ -263,7 +244,8 @@ def test_decision_tree_regression_inference():
 # ---------------------------------------------------------------------------
 
 def support_vector_regression():
-    return SVR().fit(X1_kernel, Y1_kernel.ravel())
+    svr_regression_model = SVR()
+    return svr_regression_model.fit(X1_kernel, Y1_kernel.ravel())
 
 
 @measure_energy(handler=csv_handler)
@@ -285,7 +267,8 @@ def test_support_vector_regression_inference():
 # ---------------------------------------------------------------------------
 
 def neural_network_regression():
-    return MLPRegressor(random_state=RANDOM_STATE).fit(X1, Y1.ravel())
+    neural_network_model = MLPRegressor(random_state=RANDOM_STATE)
+    return neural_network_model.fit(X1, Y1.ravel())
 
 
 @measure_energy(handler=csv_handler)
@@ -308,16 +291,14 @@ def test_neural_network_regression_inference():
 report("Linear Regression", linear_regression_model)
 report("Gaussian Regression", gaussian_regression_model, kernel=True)
 report("Decision tree Regression", decision_tree_regression_model)
-report("Support vector Regression", svr_regression_model, kernel=True)
-# [DEV-5] The neural network is scored with the neural network model. The
-# Dataset1 script called svr_regression_model here, so the MLP accuracy
-# reported for Dataset1 was in fact SVR's.
+report("support vector Regression", svr_regression_model, kernel=True)
 report("Neural Network Regression", neural_network_model)
 
-# [DEV-6] One shuffled block, each function present exactly once, so every task
-# gets exactly N_REPETITIONS measurements. The originals produced counts of 10,
-# 11, 20, 21, 22 and 30 against a stated protocol of ten, through duplicated
-# list entries and extra pre-loops.
+# [DEV-2] One shuffled block only, each function present exactly once, so
+# every task gets exactly N_REPETITIONS measurements. The Dataset1 template
+# listed linear inference twice (n=20) and the Dataset2 template ran five
+# extra pre-loops, giving counts of 10, 20, 21, 22 and 30 against a stated
+# protocol of 10.
 function_list = [
     test_linear_regression,
     test_gaussian_regression,
@@ -342,12 +323,18 @@ print("Process complete")
 csv_handler.save_data()
 
 # ---------------------------------------------------------------------------
-# [DEV-8] random_state is fixed on the splits, the trees, the MLP and the
-#         kernel subsample, so the run is reproducible.
-# [DEV-9] The output filename is distinct. Both original classification scripts
-#         wrote to output_ml_classification_drug.csv, including the one reading
+# Deviations from the Dataset1 / Dataset2 template
+#
+# [DEV-1] Uniform standardisation across all five algorithms.
+# [DEV-2] Exactly N_REPETITIONS measurements per task, no duplicated entries
+#         in the shuffled list and no pre-loops.
+# [DEV-3] Neural network inference is included in the shuffled list. The
+#         Dataset2 template omitted it, giving n=10 against n=20 elsewhere.
+# [DEV-4] random_state fixed on splits, tree and MLP.
+# [DEV-5] Distinct output filename. Both existing classification scripts wrote
+#         to output_ml_classification_drug.csv, including the one reading
 #         adult.csv.
-# [DEV-10] The unused second read_csv of a derived inference file is dropped.
-#          The Dataset1 regression script loaded adult_infer1.csv and never used
-#          it, which blocks any rerun when that file is missing.
+# [DEV-6] The unused adult_infer1.csv style second read is dropped. The
+#         Dataset1 script loaded a file it never used, which blocks any rerun
+#         when that derived file is missing.
 # ---------------------------------------------------------------------------

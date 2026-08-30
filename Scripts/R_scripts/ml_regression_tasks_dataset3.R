@@ -1,12 +1,14 @@
 #!/usr/bin/env Rscript
 #
-# ml_regression_tasks_dataset2_rerun.R
+# ml_regression_tasks_dataset3.R
 #
-# Dataset2 (UCI/Kaggle Drug Review) regression energy measurement, R side.
-# Mirrors ml_regression_tasks_dataset2_rerun.py: same data loading, same
-# feature/target selection (continuous rating_n, not binarised), same split
-# proportions, same standardisation of X and Y, same kernel caps, same five
-# algorithms, same ten measured functions, same repetition/shuffle protocol.
+# Dataset3 (NYC Taxi Trip Duration) regression energy measurement, R side.
+# Mirrors ml_regression_tasks_dataset3.py: same data path, same feature
+# selection rule (every column except id/target, LabelEncoder-equivalent on
+# non-numeric columns, dropoff_datetime dropped as target leakage per
+# [DECISION-B]), same split proportions, same standardisation, same kernel
+# caps, same five algorithms, same ten measured functions, same
+# repetition/shuffle protocol.
 #
 # Model -> CRAN package mapping (fixed by the paper, do not change):
 #   Linear Regression      -> glmnet
@@ -19,19 +21,14 @@
 RANDOM_STATE <- 42
 N_REPETITIONS <- 10
 SLEEP_SECONDS <- 30
+
+# [DECISION-A] Same cap as all five other scripts; must not be changed here
+# in isolation. See ml_regression_tasks_dataset3.py.
 KERNEL_TRAIN_CAP <- 20000
 KERNEL_PRED_CAP <- 20000
 
-# [FIX-DATA] Same note as the classification script: this is a different
-# (pre-split, pre-cleaned) release of the Drug Review corpus than the
-# 215,063-row one in the paper. Recorded in FIXES.md.
-# [FIX-DATA] Fixed to the actual UCI Drug Review release (train+test,
-# tab-separated) instead of the pre-cleaned Kaggle release (156,919 rows) --
-# 161,297 + 53,766 = 215,063 rows, an exact match to the paper's Section 5
-# figure. See FIXES.md Section 1.
-DATA_PATH_TRAIN <- "/home/ug/RvsPython/ver/drugsComTrain_raw.tsv"
-DATA_PATH_TEST <- "/home/ug/RvsPython/ver/drugsComTest_raw.tsv"
-RJOULES_OUTPUT_CSV <- "output_ml_regression_drug_rerun_r.csv"
+DATA_PATH <- "/home/ug/RvsPython/ver/RvsPython/D3.csv"
+RJOULES_OUTPUT_CSV <- "output_ml_regression_taxi_r.csv"
 if (file.exists(RJOULES_OUTPUT_CSV)) file.remove(RJOULES_OUTPUT_CSV)
 
 .script_args <- commandArgs(trailingOnly = FALSE)
@@ -52,10 +49,7 @@ suppressMessages({
 # Data preparation
 # ---------------------------------------------------------------------------
 
-dataframe <- rbind(
-  read.csv(DATA_PATH_TRAIN, sep = "\t", stringsAsFactors = FALSE, quote = "\""),
-  read.csv(DATA_PATH_TEST, sep = "\t", stringsAsFactors = FALSE, quote = "\"")
-)
+dataframe <- read.csv(DATA_PATH, stringsAsFactors = FALSE)
 dataframe[dataframe == "?"] <- NA
 
 # [R-DEV] as.integer(factor(x)) - 1 reproduces sklearn's LabelEncoder: a
@@ -79,14 +73,15 @@ label_encode <- function(x) {
   x[is.na(x)] <- "__NA__"
   as.integer(factor(x)) - 1L
 }
-dataframe$drugName_n <- label_encode(dataframe$drugName)
-dataframe$condition_n <- label_encode(dataframe$condition)
-dataframe$review_n <- label_encode(dataframe$review)
-dataframe$date_n <- label_encode(dataframe$date)
-dataframe$rating_n <- label_encode(dataframe$rating)
+dataframe$pickup_datetime_n <- label_encode(dataframe$pickup_datetime)
+dataframe$store_and_fwd_flag_n <- label_encode(dataframe$store_and_fwd_flag)
 
-training_features <- c("drugName_n", "condition_n", "review_n", "date_n", "usefulCount")
-target <- "rating_n"
+training_features <- c("vendor_id", "pickup_datetime_n", "store_and_fwd_flag_n",
+                        "passenger_count", "pickup_longitude", "pickup_latitude",
+                        "dropoff_longitude", "dropoff_latitude")
+target <- "trip_duration"
+
+dataframe <- dataframe[stats::complete.cases(dataframe[, c(training_features, target)]), ]
 
 split_indices <- function(n, seed) {
   set.seed(seed)
@@ -136,6 +131,10 @@ if (nrow(X1_kernel) < nrow(X1)) {
   cat(sprintf("[note] kernel methods trained on %d of %d rows\n", nrow(X1_kernel), nrow(X1)))
 }
 
+# [FIX-OOM] Same fix as ml_regression_tasks_dataset1_rerun.R and
+# ml_regression_tasks_dataset2_rerun.R, needed most here: at full Dataset3
+# scale the query side (roughly 290,000 rows) against an uncapped kernel
+# model is the combination that produces the OOM this fix exists for.
 kernel_pred <- cap_rows(X_pred_s, KERNEL_PRED_CAP, RANDOM_STATE)
 X_pred_kernel_s <- kernel_pred$X
 kernel_test <- cap_rows(X_test_s, KERNEL_PRED_CAP, RANDOM_STATE)
