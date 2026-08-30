@@ -38,7 +38,7 @@ The analysis was done in a environment with the following configuration
 
 ## Files Included
 - `Scripts/`: Contains all the scripts used during the experiments..
-- `Results/`: Stores the results of energy consumption measurements, inside the `cumulative_results/` folder final results(mean values) are available 
+- `Results/`: Stores the results of energy consumption measurements
 - `README.md`: This file, providing an overview of the project.
 
 ## How to Replicate
