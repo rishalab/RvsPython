@@ -1,0 +1,61 @@
+task_type,dataset,language,model,accuracy,recall,precision,f1,mae,mse,rmse
+classification,Adult (D1),Python,Random Forest,0.8509571092230526,0.8509571092230526,0.8444742875588245,0.8454836413133066,,,
+classification,Adult (D1),Python,Logistic Regression,0.8223973794656567,0.8223973794656567,0.8108187527583931,0.8053804542544015,,,
+classification,Adult (D1),Python,Naive Bayes,0.7987511516020064,0.7987511516020064,0.781685710858707,0.7685007818501296,,,
+classification,Adult (D1),Python,SVM,0.8457365134609479,0.8457365134609479,0.8379958790342366,0.8358383049604009,,,
+classification,Adult (D1),Python,Decision Tree,0.8132869280376702,0.8132869280376702,0.8138319576680555,0.8135555809370281,,,
+classification,Adult (D1),R,Random Forest,0.8633292,0.8633292,0.8575423,0.857883,,,
+classification,Adult (D1),R,Logistic Regression,0.827498,0.827498,0.8158585,0.8128048,,,
+classification,Adult (D1),R,Naive Bayes,0.7965807,0.7965807,0.7760156,0.7657976,,,
+classification,Adult (D1),R,SVM,0.8503276,0.8503276,0.8428891,0.8401675,,,
+classification,Adult (D1),R,Decision Tree,0.8464373,0.8464373,0.8384282,0.8354524,,,
+classification,Drug Review (D2),Python,Random Forest,0.7375909608722945,0.7375909608722945,0.734317288449003,0.7338143905258353,,,
+classification,Drug Review (D2),Python,Logistic Regression,0.6320647246181387,0.6320647246181387,0.6183577512823041,0.5972134577362279,,,
+classification,Drug Review (D2),Python,Naive Bayes,0.574826215330249,0.574826215330249,0.656058218056405,0.5658364479806471,,,
+classification,Drug Review (D2),Python,SVM,0.637,0.637,0.6250242567826312,0.6100872627548807,,,
+classification,Drug Review (D2),Python,Decision Tree,0.695929137702555,0.695929137702555,0.6968434916365044,0.6963535299477349,,,
+classification,Drug Review (D2),R,Random Forest,0.7423975,0.7423975,0.739047,0.7381901,,,
+classification,Drug Review (D2),R,Logistic Regression,0.6323119,0.6323119,0.6166637,0.6019889,,,
+classification,Drug Review (D2),R,Naive Bayes,0.5694225,0.5694225,0.6446859,0.5629849,,,
+classification,Drug Review (D2),R,SVM,0.63595,0.63595,0.6216342,0.6087813,,,
+classification,Drug Review (D2),R,Decision Tree,0.6379382,0.6379382,0.6263344,0.6255174,,,
+classification,Taxi (D3),Python,Random Forest,0.8390218319056385,0.8390218319056385,0.840257614404231,0.8388865325515772,,,
+classification,Taxi (D3),Python,Logistic Regression,0.5683631041137494,0.5683631041137494,0.5748754478543889,0.5592293264432733,,,
+classification,Taxi (D3),Python,Naive Bayes,0.563872635219673,0.563872635219673,0.6350315433067231,0.4985534437916627,,,
+classification,Taxi (D3),Python,SVM,0.76485,0.76485,0.7973711411034033,0.7580122525225561,,,
+classification,Taxi (D3),Python,Decision Tree,0.7788324095307632,0.7788324095307632,0.7788322598637268,0.778832233803331,,,
+classification,Taxi (D3),R,Random Forest,0.8315863,0.8315863,0.8391424,0.8306275,,,
+classification,Taxi (D3),R,Logistic Regression,0.5652766,0.5652766,0.5709141,0.5562064,,,
+classification,Taxi (D3),R,Naive Bayes,0.4858875,0.4858875,0.4775673,0.4312829,,,
+classification,Taxi (D3),R,SVM,0.7917,0.7917,0.8179003,0.7868741,,,
+classification,Taxi (D3),R,Decision Tree,0.738599,0.738599,0.7509566,0.7352972,,,
+regression,Adult (D1),Python,Linear Regression,,,,,0.29714129864387556,0.13622173973660048,0.3690822939895661
+regression,Adult (D1),Python,Gaussian Process,,,,,28.19484112585935,13422.472274192443,115.85539380707505
+regression,Adult (D1),Python,Decision Tree,,,,,0.18512642030914275,0.18510082915344456,0.4302334588958006
+regression,Adult (D1),Python,SVR,,,,,0.1927291583867986,0.12582031127637558,0.3547115888667518
+regression,Adult (D1),Python,Neural Network,,,,,0.21556803410128678,0.10477314566296561,0.32368680180533405
+regression,Adult (D1),R,Linear Regression,,,,,0.29376,0.13411,0.3662104
+regression,Adult (D1),R,Gaussian Process,,,,,0.2936739,0.1341059,0.3662048
+regression,Adult (D1),R,Decision Tree,,,,,0.2264415,0.1120553,0.3347467
+regression,Adult (D1),R,SVR,,,,,0.1876737,0.1230923,0.3508452
+regression,Adult (D1),R,Neural Network,,,,,0.2435064,0.1210987,0.3479924
+regression,Drug Review (D2),Python,Linear Regression,,,,,2.7166596751831174,10.097166641442286,3.177603915128864
+regression,Drug Review (D2),Python,Gaussian Process,,,,,110.26927423996473,319069.7420387163,564.8625868640233
+regression,Drug Review (D2),Python,Decision Tree,,,,,2.372980261781322,13.489479924673935,3.672802734244508
+regression,Drug Review (D2),Python,SVR,,,,,2.490645627774692,11.04693478429631,3.3236929437443994
+regression,Drug Review (D2),Python,Neural Network,,,,,2.594885512531276,9.609536557493756,3.099925250307458
+regression,Drug Review (D2),R,Linear Regression,,,,,2.725079,10.09943,3.17796
+regression,Drug Review (D2),R,Gaussian Process,,,,,2.727269,10.13332,3.183287
+regression,Drug Review (D2),R,Decision Tree,,,,,2.68438,10.003,3.162751
+regression,Drug Review (D2),R,SVR,,,,,2.488355,11.00521,3.31741
+regression,Drug Review (D2),R,Neural Network,,,,,2.64492,9.844772,3.137638
+regression,Taxi (D3),Python,Linear Regression,,,,,610.6157417729429,10535052.890309403,3245.7746209971824
+regression,Taxi (D3),Python,Gaussian Process,,,,,234998.00559410296,2605542075556.156,1614169.1595232997
+regression,Taxi (D3),Python,Decision Tree,,,,,602.9448083666691,92433036.1810653,9614.210117376533
+regression,Taxi (D3),Python,SVR,,,,,452.10795452208174,7922257.064211386,2814.6504337504125
+regression,Taxi (D3),Python,Neural Network,,,,,521.4222095488993,10443204.012738092,3231.5946547700087
+regression,Taxi (D3),R,Linear Regression,,,,,604.6333,10471601.0,3235.985
+regression,Taxi (D3),R,Gaussian Process,,,,,618.6666,11493725.0,3390.24
+regression,Taxi (D3),R,Decision Tree,,,,,627.9113,10504377.0,3241.046
+regression,Taxi (D3),R,SVR,,,,,400.0962,11307932.0,3362.727
+regression,Taxi (D3),R,Neural Network,,,,,551.3667,10371263.0,3220.444
